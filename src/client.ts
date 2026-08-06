@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import { runTurn } from './handshake.js';
 import { toOpenAIChunks } from './openai.js';
 import type { ChatMessage, ChatOptions, ChatResult, OpenAIStreamEvent } from './types.js';
@@ -47,10 +49,6 @@ export async function chatRaw(messages: ChatMessage[], opts: ChatOptions = {}): 
     reasoning = c.reasoningText;
   }
   return { model, content, reasoning, usage, finish_reason: content ? 'stop' : 'error' };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function looksTruncated(content: string): boolean {

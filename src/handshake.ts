@@ -38,7 +38,7 @@ export function newDeviceId(): string {
   const prefixes = ['12', '35', '9900'];
   const p = prefixes[randomInt(prefixes.length)]!;
   const len = 15 - p.length;
-  return p + Array.from({ length: len }, () => Math.floor(Math.random() * 10)).join('');
+  return p + Array.from({ length: len }, () => randomInt(10)).join('');
 }
 
 export function buildConfig(): DeviceConfig {

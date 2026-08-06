@@ -109,9 +109,9 @@ export async function* toOpenAIChunks(response: Response, initialModel: string):
         continue;
       }
       const v = msg.v;
-      if (!v || !v.message) continue;
-      const content = v.message.content || {};
-      const parts = content.parts || [];
+      if (!v?.message) continue;
+      const content = v.message.content ?? {};
+      const parts = content.parts ?? [];
       let textPart: string | null = null;
       for (const part of parts) {
         textPart = textOfPart(part);

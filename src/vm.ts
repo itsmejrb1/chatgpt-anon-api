@@ -24,11 +24,11 @@ export const VENDOR_INFO = '["Google Inc.","Win32",8,0]';
 export const LOCATION = 'https://chatgpt.com/';
 
 export function xor(e: string, t: string): string {
-  let n = '';
+  const out = new Array<string>(e.length);
   for (let r = 0; r < e.length; r++) {
-    n += String.fromCharCode(e.charCodeAt(r) ^ t.charCodeAt(r % t.length));
+    out[r] = String.fromCharCode(e.charCodeAt(r) ^ t.charCodeAt(r % t.length));
   }
-  return n;
+  return out.join('');
 }
 
 export function b64(s: string): string {
@@ -46,6 +46,25 @@ export function getTurnstile(turnstileDx: string, token: string, ipInfo: string)
 
   const payload: Record<string, string | number> = {};
 
+  const handlers: Array<[marker: string, run: (v: string) => string | number | null]> = [
+    ['singlebtoa', (v) => b64(v.split('singlebtoa(')[1]!.split(')')[0]!)],
+    [
+      'doublexor',
+      (v) => {
+        const number = v.split('doublexor(')[1]!.split(')')[0]!;
+        return b64(b64(xor(b64(xor(number, number)), b64(xor(number, number)))));
+      },
+    ],
+    ['ipinfo', () => b64(xor(ipInfo, String(xorKey)))],
+    ['element', () => b64(xor(HTML_OBJECT, String(xorKey)))],
+    ['location', () => b64(xor(LOCATION, String(xorKey)))],
+    ['random_1', () => b64(xor(String(Math.random()), String(Math.random())))],
+    ['random_2', () => Math.random()],
+    ['vendor', () => b64(xor(VENDOR_INFO, String(xorKey)))],
+    ['localstorage', () => b64(xor(LOCALSTORAGE_STR, String(xorKey)))],
+    ['history', () => b64(xor(String(randint(1, 5)), String(xorKey)))],
+  ];
+
   for (const [key0, value0] of Object.entries(keys)) {
     const value = value0;
     const num = Number(value);
@@ -53,30 +72,11 @@ export function getTurnstile(turnstileDx: string, token: string, ipInfo: string)
 
     if (isNumeric) {
       payload[key0] = b64(xor(String(num), String(xorKey)));
-    } else if (value.includes('singlebtoa')) {
-      payload[key0] = b64(value.split('singlebtoa(')[1]!.split(')')[0]!);
-    } else if (value.includes('doublexor')) {
-      const number = value.split('doublexor(')[1]!.split(')')[0]!;
-      const value1 = b64(xor(number, number));
-      const value2 = b64(xor(value1, value1));
-      payload[key0] = b64(value2);
-    } else if (value.includes('ipinfo')) {
-      payload[key0] = b64(xor(ipInfo, String(xorKey)));
-    } else if (value.includes('element')) {
-      payload[key0] = b64(xor(HTML_OBJECT, String(xorKey)));
-    } else if (value.includes('location')) {
-      payload[key0] = b64(xor(LOCATION, String(xorKey)));
-    } else if (value.includes('random_1')) {
-      const randomValue = Math.random();
-      payload[key0] = b64(xor(String(randomValue), String(randomValue)));
-    } else if (value.includes('random_2')) {
-      payload[key0] = Math.random();
-    } else if (value.includes('vendor')) {
-      payload[key0] = b64(xor(VENDOR_INFO, String(xorKey)));
-    } else if (value.includes('localstorage')) {
-      payload[key0] = b64(xor(LOCALSTORAGE_STR, String(xorKey)));
-    } else if (value.includes('history')) {
-      payload[key0] = b64(xor(String(randint(1, 5)), String(xorKey)));
+      continue;
+    }
+    const handler = handlers.find(([marker]) => value.includes(marker));
+    if (handler) {
+      payload[key0] = handler[1](value)!;
     } else {
       console.log(`UNKNOWN ITEM ${key0},${value0}`);
     }

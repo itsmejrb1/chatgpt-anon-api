@@ -107,13 +107,12 @@ export function createAnonServer(anonBase: string = DEFAULT_BASE): http.Server {
           req.on('error', fail);
         });
       } catch (e) {
-        const status =
-          typeof e === 'object' && e !== null && 'status' in e && typeof (e as { status?: unknown }).status === 'number'
-            ? ((e as { status: number }).status as 400 | 413)
-            : 400;
-        const message = status === 413 ? 'request body too large' : 'invalid JSON body: ' + (e instanceof Error ? e.message : String(e));
-        writeJson(res, status, {
-          error: { message, type: status === 413 ? 'request_too_large' : 'bad_request', status },
+        const status = (e as { status?: unknown } | null)?.status;
+        const code = typeof status === 'number' && (status === 413 || status === 400) ? status : 400;
+        const message =
+          code === 413 ? 'request body too large' : 'invalid JSON body: ' + (e instanceof Error ? e.message : String(e));
+        writeJson(res, code, {
+          error: { message, type: code === 413 ? 'request_too_large' : 'bad_request', status: code },
         });
         return;
       }

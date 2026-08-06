@@ -47,6 +47,31 @@ describe('toOpenAIChunks', () => {
     expect(chunks[chunks.length - 1]!.assistantText).toBe('Hello world');
   });
 
+  it('captures single-op events (unbatched patch form)', async () => {
+    const events = [
+      JSON.stringify({ p: '/message/content/parts/0', o: 'append', v: 'Hello! How can I' }),
+      JSON.stringify({ o: 'patch', v: [{ o: 'append', p: '/message/content/parts/0', v: ' help you today?' }] }),
+      JSON.stringify({ p: '/message/status', o: 'replace', v: 'finished_successfully' }),
+    ];
+    const chunks = await collect(events);
+    expect(chunks[0]!.delta!.content).toBe('Hello! How can I');
+    expect(chunks[1]!.delta!.content).toBe(' help you today?');
+    expect(chunks[chunks.length - 1]!.finished).toBe(true);
+    expect(chunks[chunks.length - 1]!.assistantText).toBe('Hello! How can I help you today?');
+  });
+
+  it('captures bare-v continuation events (omitted o/p fields)', async () => {
+    const events = [
+      JSON.stringify({ p: '/message/content/parts/0', o: 'append', v: 'Sure:' }),
+      JSON.stringify({ v: ' the scarecrow win an award?' }),
+      JSON.stringify({ o: 'patch', v: [{ o: 'append', p: '/message/content/parts/0', v: ' **nice**' }] }),
+      JSON.stringify({ o: 'patch', v: [{ o: 'replace', p: '/message/status', v: 'finished_successfully' }] }),
+    ];
+    const chunks = await collect(events);
+    expect(chunks[1]!.delta!.content).toBe(' the scarecrow win an award?');
+    expect(chunks[chunks.length - 1]!.assistantText).toBe('Sure: the scarecrow win an award? **nice**');
+  });
+
   it('extracts reasoning separately from assistant content', async () => {
     const events = [
       JSON.stringify({

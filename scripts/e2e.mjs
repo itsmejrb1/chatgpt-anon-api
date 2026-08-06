@@ -1,6 +1,6 @@
 import { chat } from '../dist/index.js';
 
-const message = process.argv[2] || 'Reply with exactly: E2E OK';
+const message = process.argv[2] || 'what is love?';
 
 try {
   const r = await chat([{ role: 'user', content: message }], { model: 'auto' });

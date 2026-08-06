@@ -109,12 +109,12 @@ function toUpstreamMessages(inputMessages: ChatMessage[]): Record<string, unknow
   });
 }
 
-export function buildConvBody(inputMessages: ChatMessage[]): Record<string, unknown> {
+export function buildConvBody(inputMessages: ChatMessage[], model = 'auto'): Record<string, unknown> {
   return {
     action: 'next',
     messages: toUpstreamMessages(inputMessages),
     parent_message_id: 'client-created-root',
-    model: 'auto',
+    model,
     timezone_offset_min: 0,
     timezone: 'UTC',
     history_and_training_disabled: true,
@@ -139,10 +139,11 @@ export function buildConvBody(inputMessages: ChatMessage[]): Record<string, unkn
 
 export async function runTurn(
   inputMessages: ChatMessage[],
-  opts: { anonBase?: string; deviceId?: string } = {},
+  opts: { anonBase?: string; deviceId?: string; model?: string } = {},
 ): Promise<Response> {
   const anonBase = opts.anonBase || DEFAULT_BASE;
   const deviceId = opts.deviceId || newDeviceId();
+  const model = opts.model || 'auto';
   const headers = baseHeaders(deviceId, anonBase);
   const config = buildConfig();
 
@@ -186,7 +187,7 @@ export async function runTurn(
         action: 'next',
         fork_from_shared_post: false,
         parent_message_id: 'client-created-root',
-        model: 'auto',
+        model,
         timezone_offset_min: 0,
         timezone: 'UTC',
         history_and_training_disabled: true,
@@ -209,7 +210,7 @@ export async function runTurn(
       'Openai-Sentinel-Turnstile-Token': turnstileToken,
       'X-Conduit-Token': conduit || '',
     },
-    body: JSON.stringify(buildConvBody(inputMessages)),
+    body: JSON.stringify(buildConvBody(inputMessages, model)),
   });
 
   if (!response.ok) {

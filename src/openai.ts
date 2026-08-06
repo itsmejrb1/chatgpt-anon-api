@@ -1,4 +1,4 @@
-import type { OpenAIStreamEvent, OpenAIDelta, Usage } from './types.js';
+import type { OpenAIStreamEvent, Usage } from './types.js';
 
 function usageOf(assistantText: string, reasoningText: string): Usage {
   return {
@@ -15,12 +15,26 @@ export async function* toOpenAIChunks(response: Response, initialModel: string):
   let finished = false;
   let errored = false;
   let pending = Buffer.alloc(0);
+  let lastPart: string | null = null;
 
-  const yieldDelta = (delta: OpenAIDelta | null, isFinished = finished, isErrored = errored): void => {
-    // placeholder kept for clarity; all yields happen inline below
-    void delta;
-    void isFinished;
-    void isErrored;
+  const handleOp = function* (op: any): Generator<OpenAIStreamEvent> {
+    if (!op || typeof op !== 'object') return;
+    const isContentPart = typeof op.p === 'string' && /^\/message\/content\/parts\/\d+$/.test(op.p);
+    if (isContentPart && typeof op.v === 'string') {
+      lastPart = op.p;
+      assistantText += op.v;
+      yield {
+        model,
+        delta: { role: 'assistant', content: op.v },
+        finished: false,
+        errored: false,
+        assistantText,
+        reasoningText,
+      };
+      return;
+    }
+    if (op.o === 'replace' && op.p === '/message/status' && op.v === 'finished_successfully') finished = true;
+    if (op.o === 'replace' && op.p === '/message/end_turn' && op.v === true) finished = true;
   };
 
   for await (const chunk of response.body!) {
@@ -42,28 +56,16 @@ export async function* toOpenAIChunks(response: Response, initialModel: string):
       if (msg.type === 'input_message' && msg.input_message && msg.input_message.metadata) {
         model = msg.input_message.metadata.resolved_model_slug || model;
       }
-      if (msg.o === 'patch' && Array.isArray(msg.v)) {
-        for (const op of msg.v) {
-          if (!op || typeof op !== 'object') continue;
-          if (
-            op.o === 'append' &&
-            typeof op.p === 'string' &&
-            /^\/message\/content\/parts\/\d+$/.test(op.p) &&
-            typeof op.v === 'string'
-          ) {
-            assistantText += op.v;
-            yield {
-              model,
-              delta: { role: 'assistant', content: op.v },
-              finished: false,
-              errored: false,
-              assistantText,
-              reasoningText,
-            };
-          }
-          if (op.o === 'replace' && op.p === '/message/status' && op.v === 'finished_successfully') finished = true;
-          if (op.o === 'replace' && op.p === '/message/end_turn' && op.v === true) finished = true;
-        }
+      if (typeof msg.o === 'string' && Array.isArray(msg.v) && typeof msg.p === 'undefined') {
+        for (const op of msg.v) yield* handleOp(op);
+        continue;
+      }
+      if (typeof msg.o === 'string' && typeof msg.p === 'string') {
+        yield* handleOp(msg);
+        continue;
+      }
+      if (typeof msg.v === 'string') {
+        if (lastPart !== null) yield* handleOp({ o: 'append', p: lastPart, v: msg.v });
         continue;
       }
       const v = msg.v;
@@ -149,7 +151,6 @@ export async function* toOpenAIChunks(response: Response, initialModel: string):
     }
   }
 
-  void yieldDelta;
   yield {
     model,
     delta: null,

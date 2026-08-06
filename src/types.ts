@@ -4,7 +4,7 @@ export interface ChatMessage {
 }
 
 export interface ChatOptions {
-  /** Model name passed through to the completion metadata (`auto` default). */
+  /** Model passed to the upstream conversation (`auto` default, e.g. `gpt-5-5`). */
   model?: string;
   /** Upstream anonymous host. Defaults to `https://android.chat.openai.com`. */
   anonBase?: string;

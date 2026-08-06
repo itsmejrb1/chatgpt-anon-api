@@ -10,6 +10,10 @@ export interface ChatOptions {
   anonBase?: string;
   /** Fixed device id (15 digits). Generated per call when omitted. */
   deviceId?: string;
+  /** Extra attempts after a failure or truncated answer (default 2). Only used by `chat()`. */
+  retries?: number;
+  /** Re-run the turn when the answer ends mid-sentence (default true). Only used by `chat()`. */
+  retryTruncated?: boolean;
 }
 
 export interface OpenAIDelta {

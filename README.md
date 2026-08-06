@@ -70,9 +70,9 @@ npm install chatgpt-anon-api
 ```
 
 ```js
-import { chat, streamChat } from 'chatgpt-anon-api';
+import { chat, streamChat, chatRaw, streamRaw } from 'chatgpt-anon-api';
 
-// one-shot
+// one-shot (combines all response parts)
 const r = await chat([{ role: 'user', content: 'Say hello' }]);
 console.log(r.content, '|', r.model);
 
@@ -80,9 +80,20 @@ console.log(r.content, '|', r.model);
 for await (const c of streamChat([{ role: 'user', content: 'Tell me a joke' }])) {
   if (c.delta?.content) process.stdout.write(c.delta.content);
 }
+
+// raw upstream SSE payloads, unmodified
+for await (const evt of streamRaw([{ role: 'user', content: 'Hi' }])) {
+  console.log(evt); // parsed JSON objects, in upstream order
+}
+
+// one-shot from the raw stream, no truncation retries
+const raw = await chatRaw([{ role: 'user', content: 'Hi' }]);
+console.log(raw.content);
 ```
 
-Options: `{ model, stream, anonBase, deviceId }`.
+Options: `{ model, stream, anonBase, deviceId, retries, retryTruncated }`.
+- `retries`: extra attempts (default `2`) when the upstream fails or rate-limits. `chat()` only.
+- `retryTruncated` (default `true`): re-run the turn when `chat()` detects the answer was cut off mid-sentence.
 
 ## CLI
 

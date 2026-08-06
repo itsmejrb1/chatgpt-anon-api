@@ -6,6 +6,10 @@ import type { ChatMessage } from './types.js';
 
 export const DEFAULT_BASE = process.env.ANON_BASE || 'https://android.chat.openai.com';
 
+const UPSTREAM_TIMEOUT_MS = 120_000;
+const QUICK_TIMEOUT_MS = 30_000;
+const IP_LOOKUP_TIMEOUT_MS = 10_000;
+
 export const UA =
   'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
 
@@ -64,19 +68,26 @@ export function buildConfig(): DeviceConfig {
 
 export async function fetchIpInfo(): Promise<string> {
   if (ipInfoCache.value && Date.now() - ipInfoCache.at < 10 * 60 * 1000) return ipInfoCache.value;
-  const r = await fetch('https://ipwho.is/');
-  const j = (await r.json()) as {
-    success: boolean;
-    ip?: string;
-    city?: string;
-    region?: string;
-    latitude?: number;
-    longitude?: number;
-  };
-  if (!j.success) throw new Error('ip lookup failed: ' + JSON.stringify(j));
-  const info = `['${j.ip}', '${j.city}', '${j.region}', '${j.latitude}', '${j.longitude}']`;
-  ipInfoCache = { value: info, at: Date.now() };
-  return info;
+  try {
+    const r = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(IP_LOOKUP_TIMEOUT_MS) });
+    const j = (await r.json()) as {
+      success: boolean;
+      ip?: string;
+      city?: string;
+      region?: string;
+      latitude?: number;
+      longitude?: number;
+    };
+    if (!j.success) throw new Error('ip lookup failed: ' + JSON.stringify(j));
+    const info = `['${j.ip}', '${j.city}', '${j.region}', '${j.latitude}', '${j.longitude}']`;
+    ipInfoCache = { value: info, at: Date.now() };
+    return info;
+  } catch {
+    if (ipInfoCache.value) return ipInfoCache.value;
+    const fallback = `['0.0.0.0', '', '', '0', '0']`;
+    ipInfoCache = { value: fallback, at: Date.now() };
+    return fallback;
+  }
 }
 
 export function baseHeaders(deviceId: string, anonBase: string): Record<string, string> {
@@ -152,6 +163,7 @@ export async function runTurn(
     method: 'POST',
     headers,
     body: JSON.stringify({ p }),
+    signal: AbortSignal.timeout(QUICK_TIMEOUT_MS),
   });
   let requirements: {
     token?: string;
@@ -179,25 +191,34 @@ export async function runTurn(
   const ipInfo = await fetchIpInfo();
   const turnstileToken = getTurnstile(turnstile.dx, p, ipInfo);
 
-  const prepare = (await (
-    await fetch(`${anonBase}/backend-anon/f/conversation/prepare`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        action: 'next',
-        fork_from_shared_post: false,
-        parent_message_id: 'client-created-root',
-        model,
-        timezone_offset_min: 0,
-        timezone: 'UTC',
-        history_and_training_disabled: true,
-        conversation_mode: { kind: 'primary_assistant' },
-        system_hints: [],
-        supports_buffering: true,
-        supported_encodings: ['v1'],
-      }),
-    })
-  ).json()) as { conduit_token?: string };
+  const prepareRes = await fetch(`${anonBase}/backend-anon/f/conversation/prepare`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      action: 'next',
+      fork_from_shared_post: false,
+      parent_message_id: 'client-created-root',
+      model,
+      timezone_offset_min: 0,
+      timezone: 'UTC',
+      history_and_training_disabled: true,
+      conversation_mode: { kind: 'primary_assistant' },
+      system_hints: [],
+      supports_buffering: true,
+      supported_encodings: ['v1'],
+    }),
+    signal: AbortSignal.timeout(QUICK_TIMEOUT_MS),
+  });
+  let prepare: { conduit_token?: string } = {};
+  try {
+    prepare = (await prepareRes.json()) as { conduit_token?: string };
+  } catch {
+    /* keep the empty default */
+  }
+  if (!prepareRes.ok) {
+    if (prepareRes.status === 403) throw new AnonRateLimitError(JSON.stringify(prepare).slice(0, 300));
+    throw new AnonUpstreamError(prepareRes.status, JSON.stringify(prepare).slice(0, 300));
+  }
   const conduit = prepare.conduit_token;
 
   const response = await fetch(`${anonBase}/backend-anon/f/conversation`, {
@@ -211,6 +232,7 @@ export async function runTurn(
       'X-Conduit-Token': conduit || '',
     },
     body: JSON.stringify(buildConvBody(inputMessages, model)),
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
 
   if (!response.ok) {

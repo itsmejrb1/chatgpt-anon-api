@@ -75,7 +75,7 @@ async function cmdChat(): Promise<void> {
         `\nrate limited by OpenAI (anonymous quota): ${e.upstream}\n\nTry again in a few minutes, or use a different public IP / proxy (set ANON_BASE to an alternative host).`,
       );
     } else {
-      console.error('error:', (e as Error).message);
+      console.error('error:', e instanceof Error ? e.message : String(e));
     }
     process.exit(1);
   }
@@ -89,7 +89,7 @@ async function cmdHealth(): Promise<void> {
     const j = (await r.json()) as Record<string, unknown>;
     console.log(`${r.ok ? 'ok' : 'FAIL'} ${r.status} ${Date.now() - t0}ms`, JSON.stringify(j));
   } catch (e) {
-    console.error('health check failed:', (e as Error).message);
+    console.error('health check failed:', e instanceof Error ? e.message : String(e));
     process.exit(1);
   }
 }

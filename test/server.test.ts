@@ -109,4 +109,17 @@ describe('createAnonServer', () => {
       expect(r.status).toBe(404);
     });
   });
+
+  it('rejects oversized request bodies with 413', async () => {
+    await withServer(async (base) => {
+      const r = await fetch(`${base}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'x'.repeat(11 * 1024 * 1024) }] }),
+      });
+      expect(r.status).toBe(413);
+      const j = (await r.json()) as { error: { type: string } };
+      expect(j.error.type).toBe('request_too_large');
+    });
+  });
 });

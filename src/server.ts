@@ -3,10 +3,11 @@ import { randomInt } from 'crypto';
 import { pathToFileURL } from 'url';
 
 import { runTurn, DEFAULT_BASE, AnonRateLimitError, AnonUpstreamError } from './handshake.js';
-import { toOpenAIChunks } from './openai.js';
+import { toOpenAIChunks, usageOf } from './openai.js';
 import type { ChatMessage, Usage } from './types.js';
 
 const PORT = Number(process.env.PORT || 3000);
+const MAX_BODY_BYTES = 10 * 1024 * 1024;
 
 interface CompletionBody {
   messages?: ChatMessage[];
@@ -81,23 +82,38 @@ export function createAnonServer(anonBase: string = DEFAULT_BASE): http.Server {
       try {
         body = await new Promise<CompletionBody>((resolve, reject) => {
           let data = '';
-          req.on('data', (c) => (data += c));
+          let done = false;
+          const fail = (err: unknown): void => {
+            if (!done) {
+              done = true;
+              reject(err);
+            }
+          };
+          req.on('data', (c) => {
+            data += c;
+            if (data.length > MAX_BODY_BYTES) {
+              fail(Object.assign(new Error('request body too large'), { status: 413 }));
+            }
+          });
           req.on('end', () => {
+            if (done) return;
+            done = true;
             try {
               resolve(data ? (JSON.parse(data) as CompletionBody) : {});
             } catch (e) {
               reject(e);
             }
           });
-          req.on('error', reject);
+          req.on('error', fail);
         });
       } catch (e) {
-        writeJson(res, 400, {
-          error: {
-            message: 'invalid JSON body: ' + (e instanceof Error ? e.message : String(e)),
-            type: 'bad_request',
-            status: 400,
-          },
+        const status =
+          typeof e === 'object' && e !== null && 'status' in e && typeof (e as { status?: unknown }).status === 'number'
+            ? ((e as { status: number }).status as 400 | 413)
+            : 400;
+        const message = status === 413 ? 'request body too large' : 'invalid JSON body: ' + (e instanceof Error ? e.message : String(e));
+        writeJson(res, status, {
+          error: { message, type: status === 413 ? 'request_too_large' : 'bad_request', status },
         });
         return;
       }
@@ -127,6 +143,14 @@ export function createAnonServer(anonBase: string = DEFAULT_BASE): http.Server {
         return;
       }
 
+      let upstreamCancelled = false;
+      const cancelUpstream = (): void => {
+        if (upstreamCancelled) return;
+        upstreamCancelled = true;
+        void response.body?.cancel().catch(() => undefined);
+      };
+      res.on('close', cancelUpstream);
+
       if (stream) {
         res.writeHead(200, {
           'Content-Type': 'text/event-stream; charset=utf-8',
@@ -143,7 +167,8 @@ export function createAnonServer(anonBase: string = DEFAULT_BASE): http.Server {
         try {
           if (stream && res.writableEnded === false) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         } catch (e) {
-          console.error('emit failed', (e as Error).message);
+          console.error('emit failed', e instanceof Error ? e.message : String(e));
+          cancelUpstream();
         }
       };
 
@@ -168,11 +193,7 @@ export function createAnonServer(anonBase: string = DEFAULT_BASE): http.Server {
         console.error('stream error', e);
       }
 
-      const fallbackUsage: Usage = {
-        prompt_tokens: 0,
-        completion_tokens: Math.max(1, Math.round((assistantText.length + reasoningText.length) / 4)),
-        total_tokens: Math.max(1, Math.round((assistantText.length + reasoningText.length) / 4)),
-      };
+      const fallbackUsage: Usage = usageOf(assistantText, reasoningText);
 
       if (stream) {
         emit(
@@ -187,7 +208,7 @@ export function createAnonServer(anonBase: string = DEFAULT_BASE): http.Server {
         try {
           if (res.writableEnded === false) res.write('data: [DONE]\n\n');
         } catch (e) {
-          console.error('final write failed', (e as Error).message);
+          console.error('final write failed', e instanceof Error ? e.message : String(e));
         }
       } else {
         writeJson(res, 200, {

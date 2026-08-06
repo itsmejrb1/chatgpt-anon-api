@@ -1,4 +1,4 @@
-export { chat, streamChat } from './client.js';
+export { chat, streamChat, chatRaw, streamRaw } from './client.js';
 export {
   runTurn,
   newDeviceId,

@@ -36,6 +36,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "torture": "npm run build && node scripts/torture.mjs",
     "e2e": "npm run build && node scripts/e2e.mjs",
     "start": "node dist/bin/cli.js serve",
     "prepare": "npm run build"

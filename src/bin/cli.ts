@@ -49,7 +49,7 @@ async function cmdServe(): Promise<void> {
 
 async function cmdChat(): Promise<void> {
   const flags = new Set(['--stream', '--help', '--version', '-v']);
-  const message = process.argv.slice(2).filter((a) => !flags.has(a)).join(' ').trim();
+  const message = process.argv.slice(3).filter((a) => !flags.has(a)).join(' ').trim();
   const stream = has('--stream');
   if (!message) {
     console.error('error: nothing to say. usage: chatgpt-anon chat "your message" [--stream]');

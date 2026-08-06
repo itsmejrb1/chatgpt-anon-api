@@ -1,0 +1,81 @@
+{
+  "name": "chatgpt-anon-api",
+  "version": "1.0.0",
+  "description": "Free, keyless, OpenAI-compatible API for ChatGPT's anonymous backend. Auto-solves the device-proof challenge stack (PoW + turnstile) — no account, no API key, no browser.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "chatgpt-anon": "./dist/bin/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "e2e": "npm run build && node scripts/e2e.mjs",
+    "start": "node dist/bin/cli.js serve",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "chatgpt",
+    "gpt",
+    "openai",
+    "anonymous",
+    "no-api-key",
+    "turnstile",
+    "proof-of-work",
+    "openai-compatible",
+    "proxy"
+  ],
+  "author": "Jr Busaco (itsmejrb1)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsmejrb1/chatgpt-anon-api.git"
+  },
+  "homepage": "https://github.com/itsmejrb1/chatgpt-anon-api#readme",
+  "bugs": {
+    "url": "https://github.com/itsmejrb1/chatgpt-anon-api/issues"
+  },
+  "dependencies": {
+    "esprima": "^4.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/esprima": "^4.0.6",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}

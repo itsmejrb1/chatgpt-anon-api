@@ -77,18 +77,30 @@ export function createAnonServer(anonBase: string = DEFAULT_BASE): http.Server {
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/chat/completions') {
-      const body: CompletionBody = await new Promise((resolve, reject) => {
-        let data = '';
-        req.on('data', (c) => (data += c));
-        req.on('end', () => {
-          try {
-            resolve(data ? JSON.parse(data) : {});
-          } catch (e) {
-            reject(e);
-          }
+      let body: CompletionBody;
+      try {
+        body = await new Promise<CompletionBody>((resolve, reject) => {
+          let data = '';
+          req.on('data', (c) => (data += c));
+          req.on('end', () => {
+            try {
+              resolve(data ? (JSON.parse(data) as CompletionBody) : {});
+            } catch (e) {
+              reject(e);
+            }
+          });
+          req.on('error', reject);
         });
-        req.on('error', reject);
-      });
+      } catch (e) {
+        writeJson(res, 400, {
+          error: {
+            message: 'invalid JSON body: ' + (e instanceof Error ? e.message : String(e)),
+            type: 'bad_request',
+            status: 400,
+          },
+        });
+        return;
+      }
       const messages: ChatMessage[] = Array.isArray(body.messages)
         ? body.messages.map((m) => ({
             role: (m?.role ?? 'user') as ChatMessage['role'],
